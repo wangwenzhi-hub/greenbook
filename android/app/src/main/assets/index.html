@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2e7d32">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="绿皮书">
+  <meta name="description" content="记录绿皮火车旅行足迹的PWA应用">
+  <meta name="mobile-web-app-capable" content="yes">
+  
+  <title>绿皮书 - 火车旅行日记</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  
+  <style>
+    :root {
+      --md-primary-50: #e8f5e9; --md-primary-100: #c8e6c9; --md-primary-200: #a5d6a7;
+      --md-primary-300: #81c784; --md-primary-400: #66bb6a; --md-primary-500: #4caf50;
+      --md-primary-600: #43a047; --md-primary-700: #388e3c; --md-primary-800: #2e7d32;
+      --md-primary-900: #1b5e20;
+      --md-secondary-50: #fff8e1; --md-secondary-100: #ffecb3; --md-secondary-200: #ffe082;
+      --md-secondary-300: #ffd54f; --md-secondary-400: #ffca28; --md-secondary-500: #ffc107;
+      --md-secondary-600: #ffb300; --md-secondary-700: #ffa000; --md-secondary-800: #ff8f00;
+      --md-secondary-900: #ff6f00;
+      --md-surface: #ffffff; --md-surface-variant: #f5f5f5; --md-background: #fafafa;
+      --md-error: #b00020; --md-on-primary: #ffffff; --md-on-secondary: #000000;
+      --md-on-surface: #212121; --md-on-surface-variant: #757575; --md-outline: #e0e0e0;
+      --status-online: #4caf50; --status-offline: #f44336; --status-syncing: #ff9800;
+      --train-planned: #4caf50; --train-active: #2196f3; --train-passed: #9e9e9e;
+      --header-height: 56px; --footer-height: 64px; --drawer-height: 70vh;
+
+      --safe-area-top: env(safe-area-inset-top, 0px);
+      --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root { --md-surface: #121212; --md-surface-variant: #1e1e1e; --md-background: #000000;
+        --md-on-surface: #ffffff; --md-on-surface-variant: #b0b0b0; --md-outline: #424242; }
+    }
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; width: 100%; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--md-background); color: var(--md-on-surface); }
+    
+    /* ===== 顶部状态条 ===== */
+    .status-bar { height: var(--safe-area-top); background: var(--md-primary-800); }
+    
+    /* ===== 顶部导航栏 ===== */
+    .header { position: fixed; top: var(--safe-area-top); left: 0; right: 0; height: var(--header-height);
+      background: var(--md-surface); border-bottom: 1px solid var(--md-outline);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+      z-index: 1000; }
+    .header-title { font-size: 18px; font-weight: 600; color: var(--md-on-surface); }
+    .header-actions { display: flex; gap: 12px; }
+    .header-btn { width: 40px; height: 40px; border-radius: 50%;
+      border: none; background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--md-on-surface-variant); }
+    .header-btn:hover { background: var(--md-surface-variant); }
+    
+    /* ===== 主内容区 ===== */
+    .main-content { position: fixed; top: calc(var(--safe-area-top) + var(--header-height));
+      left: 0; right: 0; bottom: var(--safe-area-bottom); overflow-y: auto;
+      padding: 16px; }
+    
+    /* ===== 卡片 ===== */
+    .card { background: var(--md-surface); border-radius: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 16px;
+      overflow: hidden; }
+    .card-header { padding: 16px; border-bottom: 1px solid var(--md-outline); }
+    .card-title { font-size: 16px; font-weight: 600; color: var(--md-on-surface); }
+    .card-body { padding: 16px; }
+    
+    /* ===== 按钮 ===== */
+    .btn { padding: 12px 24px; border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+    .btn-primary { background: var(--md-primary-500); color: white; }
+    .btn-primary:hover { background: var(--md-primary-600); }
+    .btn-secondary { background: var(--md-surface-variant); color: var(--md-on-surface); }
+    .btn-secondary:hover { background: var(--md-outline); }
+    
+    /* ===== 表单 ===== */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; margin-bottom: 8px;
+      font-size: 14px; font-weight: 500; color: var(--md-on-surface); }
+    .form-input { width: 100%; padding: 12px; border: 1px solid var(--md-outline);
+      border-radius: 8px; font-size: 14px; background: var(--md-surface);
+      color: var(--md-on-surface); }
+    .form-input:focus { outline: none; border-color: var(--md-primary-500); }
+    
+    /* ===== 列表 ===== */
+    .list { list-style: none; }
+    .list-item { padding: 16px; border-bottom: 1px solid var(--md-outline);
+      display: flex; justify-content: space-between; align-items: center; }
+    .list-item:last-child { border-bottom: none; }
+    .list-item-content { flex: 1; }
+    .list-item-title { font-size: 14px; font-weight: 500; color: var(--md-on-surface); }
+    .list-item-subtitle { font-size: 12px; color: var(--md-on-surface-variant);
+      margin-top: 4px; }
+    
+    /* ===== 模态框 ===== */
+    .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+      z-index: 2000; }
+    .modal-content { background: var(--md-surface); border-radius: 16px;
+      width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+    .modal-header { padding: 20px; border-bottom: 1px solid var(--md-outline);
+      display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 20px; font-weight: 600; }
+    .modal-close { width: 36px; height: 36px; border-radius: 50%;
+      border: none; background: var(--md-surface-variant); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 20px; border-top: 1px solid var(--md-outline);
+      display: flex; justify-content: flex-end; gap: 12px; }
+    
+    /* ===== 项目模态框 ===== */
+    .item-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+      z-index: 3000; }
+    .item-modal-content { background: var(--md-surface); border-radius: 16px;
+      width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+    .item-modal-header { display: flex; justify-content: space-between; align-items: center;
+      padding: 20px; border-bottom: 1px solid var(--md-outline); }
+    .item-modal-title { font-size: 20px; font-weight: 600; }
+    .item-modal-close { width: 36px; height: 36px; border-radius: 50%;
+      border: none; background: var(--md-surface-variant); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; }
+    .item-modal-body { padding: 20px; }
+    .item-modal-footer { display: flex; justify-content: flex-end; gap: 12px;
+      padding: 20px; border-top: 1px solid var(--md-outline); }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 8px;
+      font-size: 14px; font-weight: 500; color: var(--md-on-surface); }
+    .form-input { width: 100%; padding: 12px; border: 1px solid var(--md-outline);
+      border-radius: 8px; font-size: 14px; background: var(--md-surface);
+      color: var(--md-on-surface); }
+    .form-textarea { width: 100%; padding: 12px; border: 1px solid var(--md-outline);
+      border-radius: 8px; font-size: 14px; background: var(--md-surface);
+      color: var(--md-on-surface); resize: vertical; min-height: 80px; }
+    .checkbox-group { display: flex; align-items: center; gap: 8px; }
+    .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; }
+    .btn { padding: 12px 24px; border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 500; cursor: pointer; }
+    .btn-primary { background: var(--md-primary-500); color: white; }
+    .btn-secondary { background: var(--md-surface-variant); color: var(--md-on-surface); }
+    
+    /* ===== 空状态 ===== */
+    .empty-state { text-align: center; padding: 40px 0; color: var(--md-on-surface-variant);
+      font-size: 14px; }
+    
+    /* ===== 响应式设计 ===== */
+    @media (max-width: 768px) {
+      .main-content { padding: 12px; }
+      .card { border-radius: 12px; }
+      .btn { padding: 10px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部状态条 -->
+  <div class="status-bar"></div>
+  
+  <!-- 顶部导航栏 -->
+  <header class="header">
+    <h1 class="header-title">绿皮书</h1>
+    <div class="header-actions">
+      <button class="header-btn" id="addTripBtn">
+        <span class="material-icons-round">add</span>
+      </button>
+      <button class="header-btn" id="settingsBtn">
+        <span class="material-icons-round">settings</span>
+      </button>
+    </div>
+  </header>
+  
+  <!-- 主内容区 -->
+  <main class="main-content">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">欢迎使用绿皮书</h2>
+      </div>
+      <div class="card-body">
+        <p>绿皮书是一款记录绿皮火车旅行足迹的PWA应用，现在已经包装成Android应用。</p>
+        <p>您可以：</p>
+        <ul class="list">
+          <li class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">创建旅行计划</div>
+              <div class="list-item-subtitle">添加城市和行程</div>
+            </div>
+          </li>
+          <li class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">记录必做事项</div>
+              <div class="list-item-subtitle">添加景点和活动</div>
+            </div>
+          </li>
+          <li class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">记录必吃美食</div>
+              <div class="list-item-subtitle">添加餐厅和美食</div>
+            </div>
+          </li>
+          <li class="list-item">
+            <div class="list-item-content">
+              <div class="list-item-title">记录本地特产</div>
+              <div class="list-item-subtitle">添加特产和购买信息</div>
+            </div>
+          </li>
+        </ul>
+        <button class="btn btn-primary" style="width: 100%; margin-top: 20px;">开始使用</button>
+      </div>
+    </div>
+  </main>
+  
+  <!-- 添加/编辑项目模态框 -->
+  <div class="item-modal" id="itemModal" style="display: none;">
+    <div class="item-modal-content">
+      <div class="item-modal-header">
+        <h3 id="itemModalTitle">添加必做项目</h3>
+        <button class="item-modal-close" id="itemModalClose">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      <div class="item-modal-body">
+        <input type="hidden" id="itemModalType">
+        <input type="hidden" id="itemModalId">
+        
+        <!-- 必做事项字段 -->
+        <div id="todoFields">
+          <div class="form-group">
+            <label>事项名称</label>
+            <input type="text" class="form-input" id="todoName" placeholder="请输入事项名称">
+          </div>
+          <div class="form-group">
+            <label>优先级</label>
+            <select class="form-input" id="todoPriority">
+              <option value="高">高</option>
+              <option value="中" selected>中</option>
+              <option value="低">低</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>预计耗时</label>
+            <input type="text" class="form-input" id="todoDuration" placeholder="如 2 小时、半天">
+          </div>
+          <div class="form-group">
+            <label>地址/位置</label>
+            <input type="text" class="form-input" id="todoLocation" placeholder="导航用地址">
+          </div>
+          <div class="form-group">
+            <label>开放时间/预约</label>
+            <input type="text" class="form-input" id="todoOpeningHours" placeholder="避免跑空">
+          </div>
+          <div class="form-group">
+            <label>费用/门票</label>
+            <input type="text" class="form-input" id="todoCost" placeholder="预算参考">
+          </div>
+          <div class="form-group">
+            <label>完成状态</label>
+            <div class="checkbox-group">
+              <input type="checkbox" id="todoCompleted">
+              <label for="todoCompleted">已完成</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <textarea class="form-textarea" id="todoNote" placeholder="补充提示"></textarea>
+          </div>
+        </div>
+        
+        <!-- 必吃美食字段 -->
+        <div id="foodFields" style="display: none;">
+          <div class="form-group">
+            <label>美食名称</label>
+            <input type="text" class="form-input" id="foodName" placeholder="请输入美食名称">
+          </div>
+          <div class="form-group">
+            <label>类型</label>
+            <select class="form-input" id="foodType">
+              <option value="正餐">正餐</option>
+              <option value="小吃">小吃</option>
+              <option value="饮品">饮品</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>推荐店铺</label>
+            <input type="text" class="form-input" id="foodShop" placeholder="店名 + 地址">
+          </div>
+          <div class="form-group">
+            <label>人均价格</label>
+            <input type="number" class="form-input" id="foodPrice" placeholder="预算参考">
+          </div>
+          <div class="form-group">
+            <label>推荐点单</label>
+            <input type="text" class="form-input" id="foodRecommendation" placeholder="避坑指南">
+          </div>
+          <div class="form-group">
+            <label>口味评价</label>
+            <input type="text" class="form-input" id="foodReview" placeholder="个人感受">
+          </div>
+          <div class="form-group">
+            <label>打卡状态</label>
+            <div class="checkbox-group">
+              <input type="checkbox" id="foodCompleted">
+              <label for="foodCompleted">已吃过</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <textarea class="form-textarea" id="foodNote" placeholder="如 适合打包"></textarea>
+          </div>
+        </div>
+        
+        <!-- 本地特产字段 -->
+        <div id="specialtyFields" style="display: none;">
+          <div class="form-group">
+            <label>特产名称</label>
+            <input type="text" class="form-input" id="specialtyName" placeholder="请输入特产名称">
+          </div>
+          <div class="form-group">
+            <label>类别</label>
+            <select class="form-input" id="specialtyCategory">
+              <option value="食品">食品</option>
+              <option value="文创">文创</option>
+              <option value="手作">手作</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>购买地点</label>
+            <input type="text" class="form-input" id="specialtyLocation" placeholder="店铺 / 市场">
+          </div>
+          <div class="form-group">
+            <label>参考价格</label>
+            <input type="number" class="form-input" id="specialtyPrice" placeholder="单价 / 礼盒价">
+          </div>
+          <div class="form-group">
+            <label>保质期</label>
+            <input type="text" class="form-input" id="specialtyShelfLife" placeholder="避免过期">
+          </div>
+          <div class="form-group">
+            <label>便携性</label>
+            <select class="form-input" id="specialtyPortability">
+              <option value="优">优</option>
+              <option value="良">良</option>
+              <option value="差">差</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>购买状态</label>
+            <div class="checkbox-group">
+              <input type="checkbox" id="specialtyCompleted">
+              <label for="specialtyCompleted">已购买</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <textarea class="form-textarea" id="specialtyNote" placeholder="如 适合送礼"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="item-modal-footer">
+        <button class="btn btn-secondary" id="itemModalCancel">取消</button>
+        <button class="btn btn-primary" id="itemModalSave">保存</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    // 绿皮书 PWA 核心应用
+    class GreenBookApp {
+      constructor() {
+        this.db = null;
+        this.trips = [];
+        this.currentTrip = null;
+        this.cities = [];
+        this.currentCity = null;
+        this.isOnline = navigator.onLine;
+        
+        this.init();
+      }
+      
+      // 初始化应用
+      async init() {
+        await this.initDatabase();
+        await this.loadTrips();
+        this.bindEvents();
+        this.registerServiceWorker();
+      }
+      
+      // 初始化数据库
+      async initDatabase() {
+        try {
+          this.db = new Dexie('GreenBookDB');
+          this.db.version(10).stores({
+            trips: `++id, name, startDate, endDate, status, createdAt, updatedAt`,
+            cities: `++id, tripId, name, lat, lng, arrivalDate, departureDate, stayDays, accommodation, order, createdAt, updatedAt`,
+            tickets: `++id, tripId, fromCityId, toCityId, trainNumber, departureStation, arrivalStation, departureTime, arrivalTime, seatType, price, notes, status, createdAt`,
+            todos: `++id, cityId, text, checked, order, priority, duration, location, openingHours, cost, note, createdAt, updatedAt`,
+            foods: `++id, cityId, text, checked, order, type, shop, price, recommendation, review, note, createdAt, updatedAt`,
+            nodes: `++id, tripId, name, lat, lng, type, createdAt`,
+            inventory: `++id, tripId, name, category, storage, createdAt, updatedAt`,
+            diary: `++id, tripId, cityId, title, content, media, tags, timestamp, isLocked, createdAt, updatedAt`,
+            specialties: `++id, cityId, name, category, location, price, shelfLife, portability, checked, note, createdAt, updatedAt`,
+            globalSettings: `key, value, updatedAt`,
+            locationTracks: `++id, tripId, lat, lng, timestamp, accuracy, speed, altitude`
+          });
+          
+          await this.db.open();
+          console.log('IndexedDB 数据库已打开');
+        } catch (error) {
+          console.error('初始化数据库失败:', error);
+        }
+      }
+      
+      // 加载旅行列表
+      async loadTrips() {
+        try {
+          this.trips = await this.db.trips.toArray();
+          this.renderTrips();
+        } catch (error) {
+          console.error('加载旅行失败:', error);
+        }
+      }
+      
+      // 渲染旅行列表
+      renderTrips() {
+        const mainContent = document.querySelector('.main-content');
+        if (this.trips.length === 0) {
+          mainContent.innerHTML = `
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">欢迎使用绿皮书</h2>
+              </div>
+              <div class="card-body">
+                <p>绿皮书是一款记录绿皮火车旅行足迹的PWA应用，现在已经包装成Android应用。</p>
+                <p>您可以：</p>
+                <ul class="list">
+                  <li class="list-item">
+                    <div class="list-item-content">
+                      <div class="list-item-title">创建旅行计划</div>
+                      <div class="list-item-subtitle">添加城市和行程</div>
+                    </div>
+                  </li>
+                  <li class="list-item">
+                    <div class="list-item-content">
+                      <div class="list-item-title">记录必做事项</div>
+                      <div class="list-item-subtitle">添加景点和活动</div>
+                    </div>
+                  </li>
+                  <li class="list-item">
+                    <div class="list-item-content">
+                      <div class="list-item-title">记录必吃美食</div>
+                      <div class="list-item-subtitle">添加餐厅和美食</div>
+                    </div>
+                  </li>
+                  <li class="list-item">
+                    <div class="list-item-content">
+                      <div class="list-item-title">记录本地特产</div>
+                      <div class="list-item-subtitle">添加特产和购买信息</div>
+                    </div>
+                  </li>
+                </ul>
+                <button class="btn btn-primary" id="createTripBtn" style="width: 100%; margin-top: 20px;">创建旅行计划</button>
+              </div>
+            </div>
+          `;
+          
+          document.getElementById('createTripBtn').addEventListener('click', () => this.createTrip());
+        } else {
+          mainContent.innerHTML = `
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">我的旅行计划</h2>
+              </div>
+              <div class="card-body">
+                <ul class="list">
+                  ${this.trips.map(trip => `
+                    <li class="list-item">
+                      <div class="list-item-content">
+                        <div class="list-item-title">${trip.name}</div>
+                        <div class="list-item-subtitle">${new Date(trip.startDate).toLocaleDateString()} 至 ${new Date(trip.endDate).toLocaleDateString()}</div>
+                      </div>
+                      <button class="btn btn-secondary" data-id="${trip.id}">查看</button>
+                    </li>
+                  `).join('')}
+                </ul>
+                <button class="btn btn-primary" id="addTripBtn" style="width: 100%; margin-top: 20px;">添加旅行计划</button>
+              </div>
+            </div>
+          `;
+          
+          document.getElementById('addTripBtn').addEventListener('click', () => this.createTrip());
+          
+          document.querySelectorAll('.list-item button').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const tripId = parseInt(btn.dataset.id);
+              this.loadTripDetails(tripId);
+            });
+          });
+        }
+      }
+      
+      // 创建旅行计划
+      createTrip() {
+        const tripName = prompt('请输入旅行名称:');
+        if (!tripName || !tripName.trim()) return;
+        
+        const startDate = prompt('请输入开始日期 (YYYY-MM-DD):');
+        if (!startDate || !startDate.trim()) return;
+        
+        const endDate = prompt('请输入结束日期 (YYYY-MM-DD):');
+        if (!endDate || !endDate.trim()) return;
+        
+        const trip = {
+          name: tripName.trim(),
+          startDate: new Date(startDate).getTime(),
+          endDate: new Date(endDate).getTime(),
+          status: 'planned',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        
+        this.db.trips.add(trip).then(() => {
+          this.loadTrips();
+          alert('旅行计划创建成功！');
+        }).catch(error => {
+          console.error('创建旅行失败:', error);
+          alert('创建旅行失败: ' + error.message);
+        });
+      }
+      
+      // 加载旅行详情
+      async loadTripDetails(tripId) {
+        try {
+          this.currentTrip = await this.db.trips.get(tripId);
+          this.cities = await this.db.cities.where('tripId').equals(tripId).toArray();
+          this.renderTripDetails();
+        } catch (error) {
+          console.error('加载旅行详情失败:', error);
+        }
+      }
+      
+      // 渲染旅行详情
+      renderTripDetails() {
+        const mainContent = document.querySelector('.main-content');
+        mainContent.innerHTML = `
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">${this.currentTrip.name}</h2>
+            </div>
+            <div class="card-body">
+              <p>日期: ${new Date(this.currentTrip.startDate).toLocaleDateString()} 至 ${new Date(this.currentTrip.endDate).toLocaleDateString()}</p>
+              <p>状态: ${this.currentTrip.status === 'planned' ? '计划中' : this.currentTrip.status === 'active' ? '进行中' : '已完成'}</p>
+              <button class="btn btn-secondary" id="addCityBtn" style="width: 100%; margin-top: 20px;">添加城市</button>
+            </div>
+          </div>
+          
+          ${this.cities.length > 0 ? `
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">城市列表</h2>
+              </div>
+              <div class="card-body">
+                <ul class="list">
+                  ${this.cities.map(city => `
+                    <li class="list-item">
+                      <div class="list-item-content">
+                        <div class="list-item-title">${city.name}</div>
+                        <div class="list-item-subtitle">${new Date(city.arrivalDate).toLocaleDateString()} 至 ${new Date(city.departureDate).toLocaleDateString()}</div>
+                      </div>
+                      <button class="btn btn-secondary" data-id="${city.id}">查看</button>
+                    </li>
+                  `).join('')}
+                </ul>
+              </div>
+            </div>
+          ` : ''}
+        `;
+        
+        document.getElementById('addCityBtn').addEventListener('click', () => this.addCity());
+        
+        document.querySelectorAll('.list-item button').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const cityId = parseInt(btn.dataset.id);
+            this.loadCityDetails(cityId);
+          });
+        });
+      }
+      
+      // 添加城市
+      addCity() {
+        const cityName = prompt('请输入城市名称:');
+        if (!cityName || !cityName.trim()) return;
+        
+        const arrivalDate = prompt('请输入到达日期 (YYYY-MM-DD):');
+        if (!arrivalDate || !arrivalDate.trim()) return;
+        
+        const departureDate = prompt('请输入离开日期 (YYYY-MM-DD):');
+        if (!departureDate || !departureDate.trim()) return;
+        
+        const city = {
+          tripId: this.currentTrip.id,
+          name: cityName.trim(),
+          arrivalDate: new Date(arrivalDate).getTime(),
+          departureDate: new Date(departureDate).getTime(),
+          order: this.cities.length,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        
+        this.db.cities.add(city).then(() => {
+          this.loadTripDetails(this.currentTrip.id);
+          alert('城市添加成功！');
+        }).catch(error => {
+          console.error('添加城市失败:', error);
+          alert('添加城市失败: ' + error.message);
+        });
+      }
+      
+      // 加载城市详情
+      async loadCityDetails(cityId) {
+        try {
+          this.currentCity = await this.db.cities.get(cityId);
+          await this.loadChecklists(cityId);
+          await this.loadSpecialties(cityId);
+          this.renderCityDetails();
+        } catch (error) {
+          console.error('加载城市详情失败:', error);
+        }
+      }
+      
+      // 加载必做事项和必吃美食
+      async loadChecklists(cityId) {
+        try {
+          const todos = await this.db.todos.where('cityId').equals(cityId).toArray();
+          const foods = await this.db.foods.where('cityId').equals(cityId).toArray();
+          this.renderChecklist('todoList', todos, 'todo');
+          this.renderChecklist('foodList', foods, 'food');
+        } catch (error) {
+          console.error('加载清单失败:', error);
+        }
+      }
+      
+      // 加载特产列表
+      async loadSpecialties(cityId) {
+        try {
+          const specialties = await this.db.specialties.where('cityId').equals(cityId).toArray();
+          this.renderSpecialties(specialties);
+        } catch (error) {
+          console.error('加载特产失败:', error);
+        }
+      }
+      
+      // 渲染必做事项和必吃美食
+      renderChecklist(containerId, items, type) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        items.forEach((item, index) => {
+          const div = document.createElement('div');
+          div.className = 'list-item';
+          
+          let additionalInfo = '';
+          
+          // 必做事项字段
+          if (type === 'todo') {
+            if (item.priority) {
+              additionalInfo += `<div class="list-item-subtitle">优先级: ${item.priority}</div>`;
+            }
+            if (item.duration) {
+              additionalInfo += `<div class="list-item-subtitle">预计耗时: ${item.duration}</div>`;
+            }
+            if (item.location) {
+              additionalInfo += `<div class="list-item-subtitle">地址: ${item.location}</div>`;
+            }
+            if (item.openingHours) {
+              additionalInfo += `<div class="list-item-subtitle">开放时间: ${item.openingHours}</div>`;
+            }
+            if (item.cost) {
+              additionalInfo += `<div class="list-item-subtitle">费用: ${item.cost}</div>`;
+            }
+          }
+          // 必吃美食字段
+          else if (type === 'food') {
+            if (item.type) {
+              additionalInfo += `<div class="list-item-subtitle">类型: ${item.type}</div>`;
+            }
+            if (item.shop) {
+              additionalInfo += `<div class="list-item-subtitle">推荐店铺: ${item.shop}</div>`;
+            }
+            if (item.price) {
+              additionalInfo += `<div class="list-item-subtitle">人均价格: ¥${item.price.toFixed(2)}</div>`;
+            }
+            if (item.recommendation) {
+              additionalInfo += `<div class="list-item-subtitle">推荐点单: ${item.recommendation}</div>`;
+            }
+            if (item.review) {
+              additionalInfo += `<div class="list-item-subtitle">口味评价: ${item.review}</div>`;
+            }
+          }
+          
+          // 备注
+          if (item.note) {
+            additionalInfo += `<div class="list-item-subtitle">备注: ${item.note}</div>`;
+          }
+          
+          div.innerHTML = `
+            <div class="list-item-content">
+              <div class="list-item-title ${item.checked ? 'checked' : ''}">${item.text}</div>
+              ${additionalInfo}
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="app.editCheckItem(${item.id}, '${type}')">编辑</button>
+              <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="app.deleteCheckItem(${item.id}, '${type}')">删除</button>
+            </div>
+          `;
+          
+          container.appendChild(div);
+        });
+      }
+      
+      // 渲染特产列表
+      renderSpecialties(specialties) {
+        const container = document.getElementById('specialtyList');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        specialties.forEach(specialty => {
+          const div = document.createElement('div');
+          div.className = 'list-item';
+          
+          let additionalInfo = '';
+          
+          // 本地特产字段
+          if (specialty.category) {
+            additionalInfo += `<div class="list-item-subtitle">类别: ${specialty.category}</div>`;
+          }
+          if (specialty.location) {
+            additionalInfo += `<div class="list-item-subtitle">购买地点: ${specialty.location}</div>`;
+          }
+          if (specialty.price) {
+            additionalInfo += `<div class="list-item-subtitle">参考价格: ¥${specialty.price.toFixed(2)}</div>`;
+          }
+          if (specialty.shelfLife) {
+            additionalInfo += `<div class="list-item-subtitle">保质期: ${specialty.shelfLife}</div>`;
+          }
+          if (specialty.portability) {
+            additionalInfo += `<div class="list-item-subtitle">便携性: ${specialty.portability}</div>`;
+          }
+          if (specialty.note) {
+            additionalInfo += `<div class="list-item-subtitle">备注: ${specialty.note}</div>`;
+          }
+          
+          div.innerHTML = `
+            <div class="list-item-content">
+              <div class="list-item-title ${specialty.checked ? 'checked' : ''}">${specialty.name}</div>
+              ${additionalInfo}
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="app.editSpecialty(${specialty.id})">编辑</button>
+              <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="app.deleteSpecialty(${specialty.id})">删除</button>
+            </div>
+          `;
+          
+          container.appendChild(div);
+        });
+      }
+      
+      // 显示添加/编辑项目模态框
+      showItemModal(type, item = null) {
+        if (!this.currentCity) return;
+        
+        const modal = document.getElementById('itemModal');
+        const modalTitle = document.getElementById('itemModalTitle');
+        const modalType = document.getElementById('itemModalType');
+        const modalId = document.getElementById('itemModalId');
+        
+        // 隐藏所有字段
+        document.getElementById('todoFields').style.display = 'none';
+        document.getElementById('foodFields').style.display = 'none';
+        document.getElementById('specialtyFields').style.display = 'none';
+        
+        // 显示对应的字段
+        if (type === 'todo') {
+          modalTitle.textContent = item ? '编辑必做项目' : '添加必做项目';
+          document.getElementById('todoFields').style.display = 'block';
+          
+          // 填充数据
+          if (item) {
+            document.getElementById('todoName').value = item.text || '';
+            document.getElementById('todoPriority').value = item.priority || '中';
+            document.getElementById('todoDuration').value = item.duration || '';
+            document.getElementById('todoLocation').value = item.location || '';
+            document.getElementById('todoOpeningHours').value = item.openingHours || '';
+            document.getElementById('todoCost').value = item.cost || '';
+            document.getElementById('todoCompleted').checked = item.checked || false;
+            document.getElementById('todoNote').value = item.note || '';
+          } else {
+            document.getElementById('todoName').value = '';
+            document.getElementById('todoPriority').value = '中';
+            document.getElementById('todoDuration').value = '';
+            document.getElementById('todoLocation').value = '';
+            document.getElementById('todoOpeningHours').value = '';
+            document.getElementById('todoCost').value = '';
+            document.getElementById('todoCompleted').checked = false;
+            document.getElementById('todoNote').value = '';
+          }
+        } else if (type === 'food') {
+          modalTitle.textContent = item ? '编辑必吃美食' : '添加必吃美食';
+          document.getElementById('foodFields').style.display = 'block';
+          
+          // 填充数据
+          if (item) {
+            document.getElementById('foodName').value = item.text || '';
+            document.getElementById('foodType').value = item.type || '正餐';
+            document.getElementById('foodShop').value = item.shop || '';
+            document.getElementById('foodPrice').value = item.price || '';
+            document.getElementById('foodRecommendation').value = item.recommendation || '';
+            document.getElementById('foodReview').value = item.review || '';
+            document.getElementById('foodCompleted').checked = item.checked || false;
+            document.getElementById('foodNote').value = item.note || '';
+          } else {
+            document.getElementById('foodName').value = '';
+            document.getElementById('foodType').value = '正餐';
+            document.getElementById('foodShop').value = '';
+            document.getElementById('foodPrice').value = '';
+            document.getElementById('foodRecommendation').value = '';
+            document.getElementById('foodReview').value = '';
+            document.getElementById('foodCompleted').checked = false;
+            document.getElementById('foodNote').value = '';
+          }
+        } else if (type === 'specialty') {
+          modalTitle.textContent = item ? '编辑本地特产' : '添加本地特产';
+          document.getElementById('specialtyFields').style.display = 'block';
+          
+          // 填充数据
+          if (item) {
+            document.getElementById('specialtyName').value = item.name || '';
+            document.getElementById('specialtyCategory').value = item.category || '食品';
+            document.getElementById('specialtyLocation').value = item.location || '';
+            document.getElementById('specialtyPrice').value = item.price || '';
+            document.getElementById('specialtyShelfLife').value = item.shelfLife || '';
+            document.getElementById('specialtyPortability').value = item.portability || '良';
+            document.getElementById('specialtyCompleted').checked = item.checked || false;
+            document.getElementById('specialtyNote').value = item.note || '';
+          } else {
+            document.getElementById('specialtyName').value = '';
+            document.getElementById('specialtyCategory').value = '食品';
+            document.getElementById('specialtyLocation').value = '';
+            document.getElementById('specialtyPrice').value = '';
+            document.getElementById('specialtyShelfLife').value = '';
+            document.getElementById('specialtyPortability').value = '良';
+            document.getElementById('specialtyCompleted').checked = false;
+            document.getElementById('specialtyNote').value = '';
+          }
+        }
+        
+        // 设置模态框类型和ID
+        modalType.value = type;
+        modalId.value = item ? item.id : '';
+        
+        // 显示模态框
+        modal.style.display = 'flex';
+        
+        // 绑定事件
+        document.getElementById('itemModalClose').addEventListener('click', () => {
+          modal.style.display = 'none';
+        });
+        
+        document.getElementById('itemModalCancel').addEventListener('click', () => {
+          modal.style.display = 'none';
+        });
+        
+        document.getElementById('itemModalSave').addEventListener('click', () => {
+          this.saveItemModal();
+        });
+      }
+      
+      // 保存项目模态框数据
+      async saveItemModal() {
+        const modal = document.getElementById('itemModal');
+        const type = document.getElementById('itemModalType').value;
+        const id = document.getElementById('itemModalId').value;
+        
+        let data = {
+          cityId: this.currentCity.id,
+          updatedAt: Date.now()
+        };
+        
+        if (type === 'todo') {
+          const name = document.getElementById('todoName').value.trim();
+          if (!name) {
+            alert('请输入事项名称');
+            return;
+          }
+          
+          data.text = name;
+          data.priority = document.getElementById('todoPriority').value;
+          data.duration = document.getElementById('todoDuration').value.trim();
+          data.location = document.getElementById('todoLocation').value.trim();
+          data.openingHours = document.getElementById('todoOpeningHours').value.trim();
+          data.cost = document.getElementById('todoCost').value.trim();
+          data.checked = document.getElementById('todoCompleted').checked;
+          data.note = document.getElementById('todoNote').value.trim();
+          data.order = Date.now();
+          data.createdAt = Date.now();
+        } else if (type === 'food') {
+          const name = document.getElementById('foodName').value.trim();
+          if (!name) {
+            alert('请输入美食名称');
+            return;
+          }
+          
+          data.text = name;
+          data.type = document.getElementById('foodType').value;
+          data.shop = document.getElementById('foodShop').value.trim();
+          data.price = parseFloat(document.getElementById('foodPrice').value) || 0;
+          data.recommendation = document.getElementById('foodRecommendation').value.trim();
+          data.review = document.getElementById('foodReview').value.trim();
+          data.checked = document.getElementById('foodCompleted').checked;
+          data.note = document.getElementById('foodNote').value.trim();
+          data.order = Date.now();
+          data.createdAt = Date.now();
+        } else if (type === 'specialty') {
+          const name = document.getElementById('specialtyName').value.trim();
+          if (!name) {
+            alert('请输入特产名称');
+            return;
+          }
+          
+          data.name = name;
+          data.category = document.getElementById('specialtyCategory').value;
+          data.location = document.getElementById('specialtyLocation').value.trim();
+          data.price = parseFloat(document.getElementById('specialtyPrice').value) || 0;
+          data.shelfLife = document.getElementById('specialtyShelfLife').value.trim();
+          data.portability = document.getElementById('specialtyPortability').value;
+          data.checked = document.getElementById('specialtyCompleted').checked;
+          data.note = document.getElementById('specialtyNote').value.trim();
+          data.createdAt = Date.now();
+        }
+        
+        try {
+          if (id) {
+            // 更新现有项目
+            if (type === 'todo' || type === 'food') {
+              const table = type === 'todo' ? this.db.todos : this.db.foods;
+              await table.update(parseInt(id), data);
+            } else if (type === 'specialty') {
+              await this.db.specialties.update(parseInt(id), data);
+            }
+            alert('项目已更新');
+          } else {
+            // 添加新项目
+            if (type === 'todo' || type === 'food') {
+              const table = type === 'todo' ? this.db.todos : this.db.foods;
+              await table.add(data);
+            } else if (type === 'specialty') {
+              await this.db.specialties.add(data);
+            }
+            alert(`已添加${type === 'todo' ? '必做项目' : type === 'food' ? '必吃美食' : '本地特产'}: ${data.text || data.name}`);
+          }
+          
+          // 重新加载数据
+          if (type === 'todo' || type === 'food') {
+            await this.loadChecklists(this.currentCity.id);
+          } else if (type === 'specialty') {
+            await this.loadSpecialties(this.currentCity.id);
+          }
+          
+          // 关闭模态框
+          modal.style.display = 'none';
+        } catch (error) {
+          console.error('保存项目失败:', error);
+          alert('保存项目失败: ' + error.message);
+        }
+      }
+      
+      // 添加必做事项或必吃美食
+      addCheckItem(type) {
+        this.showItemModal(type);
+      }
+      
+      // 编辑必做事项或必吃美食
+      async editCheckItem(id, type) {
+        try {
+          const table = type === 'todo' ? this.db.todos : this.db.foods;
+          const item = await table.get(id);
+          if (item) {
+            this.showItemModal(type, item);
+          }
+        } catch (error) {
+          console.error('编辑项目失败:', error);
+          alert('编辑项目失败: ' + error.message);
+        }
+      }
+      
+      // 删除必做事项或必吃美食
+      async deleteCheckItem(id, type) {
+        if (!confirm('确定要删除这个项目吗？')) return;
+        
+        try {
+          const table = type === 'todo' ? this.db.todos : this.db.foods;
+          await table.delete(id);
+          await this.loadChecklists(this.currentCity.id);
+          alert('项目已删除');
+        } catch (error) {
+          console.error('删除项目失败:', error);
+          alert('删除项目失败: ' + error.message);
+        }
+      }
+      
+      // 添加本地特产
+      addSpecialty() {
+        this.showItemModal('specialty');
+      }
+      
+      // 编辑本地特产
+      async editSpecialty(id) {
+        try {
+          const item = await this.db.specialties.get(id);
+          if (item) {
+            this.showItemModal('specialty', item);
+          }
+        } catch (error) {
+          console.error('编辑特产失败:', error);
+          alert('编辑特产失败: ' + error.message);
+        }
+      }
+      
+      // 删除特产
+      async deleteSpecialty(id) {
+        if (!confirm('确定要删除这个特产吗？')) return;
+        
+        try {
+          await this.db.specialties.delete(id);
+          await this.loadSpecialties(this.currentCity.id);
+          alert('特产已删除');
+        } catch (error) {
+          console.error('删除特产失败:', error);
+          alert('删除特产失败: ' + error.message);
+        }
+      }
+      
+      // 渲染城市详情
+      renderCityDetails() {
+        const mainContent = document.querySelector('.main-content');
+        mainContent.innerHTML = `
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">${this.currentCity.name}</h2>
+            </div>
+            <div class="card-body">
+              <p>到达日期: ${new Date(this.currentCity.arrivalDate).toLocaleDateString()}</p>
+              <p>离开日期: ${new Date(this.currentCity.departureDate).toLocaleDateString()}</p>
+              <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button class="btn btn-primary" style="flex: 1;" onclick="app.addCheckItem('todo')">添加必做事项</button>
+                <button class="btn btn-primary" style="flex: 1;" onclick="app.addCheckItem('food')">添加必吃美食</button>
+                <button class="btn btn-primary" style="flex: 1;" onclick="app.addSpecialty()">添加本地特产</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">必做事项</h2>
+            </div>
+            <div class="card-body" id="todoList">
+              <div class="empty-state">暂无必做事项</div>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">必吃美食</h2>
+            </div>
+            <div class="card-body" id="foodList">
+              <div class="empty-state">暂无必吃美食</div>
+            </div>
+          </div>
+          
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">本地特产</h2>
+            </div>
+            <div class="card-body" id="specialtyList">
+              <div class="empty-state">暂无本地特产</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      // 绑定事件
+      bindEvents() {
+        // 网络状态
+        window.addEventListener('online', () => {
+          this.isOnline = true;
+          console.log('网络已连接');
+        });
+        
+        window.addEventListener('offline', () => {
+          this.isOnline = false;
+          console.log('网络已断开');
+        });
+      }
+      
+      // 注册Service Worker
+      async registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          try {
+            const registration = await navigator.serviceWorker.register('service-worker.js');
+            console.log('Service Worker 注册成功:', registration.scope);
+          } catch (error) {
+            console.error('Service Worker 注册失败:', error);
+          }
+        }
+      }
+    }
+    
+    // 初始化应用
+    const app = new GreenBookApp();
+  </script>
+</body>
+</html>
